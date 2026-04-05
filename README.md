@@ -1,59 +1,229 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Context-Augmented Local LLM Chatbot
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> An internal AI assistant for **FireSecure SARL**, powered by a locally-running LLM via [Ollama](https://ollama.com) and a context-aware knowledge retrieval system — no cloud API keys required.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Overview
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+FireBot is a **Laravel 12** backend that exposes a REST API endpoint for chatting with a locally-hosted language model (Microsoft **phi3** via Ollama). Instead of sending raw user queries to the LLM, FireBot first retrieves the most relevant entries from a structured **knowledge base** stored in the database, then injects them as context into the prompt. This approach — known as **context-augmented prompting (RAG-lite)** — significantly improves response accuracy and keeps answers grounded in company-specific data.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Key Characteristics
 
-## Learning Laravel
+| Feature | Detail |
+|---|---|
+| LLM | `phi3` (Microsoft) via Ollama |
+| Backend | Laravel 12 / PHP 8.2+ |
+| Frontend | Blade + Tailwind CSS v4 + Vite |
+| Database | MySQL (SQLite supported for dev) |
+| Auth | Laravel Sanctum |
+| Retrieval | Keyword scoring with basic stemming |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+---
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Architecture
 
-## Laravel Sponsors
+```
+User Message
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│  ChatbotController::chat()                   │
+│                                              │
+│  1. Extract & clean keywords (stop-word     │
+│     removal, basic stemming)                │
+│                                              │
+│  2. Score all chatbot_knowledge rows        │
+│     (title match: +3, category: +2,         │
+│      content: +1), take top 5              │
+│                                              │
+│  3. Build structured prompt with context   │
+│                                              │
+│  4. POST to Ollama → phi3                  │
+│                                              │
+│  5. Return JSON { reply: "..." }           │
+└─────────────────────────────────────────────┘
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+---
 
-### Premium Partners
+## Prerequisites
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Before you begin, ensure you have the following installed:
 
-## Contributing
+- **PHP** >= 8.2 with extensions: `pdo`, `mbstring`, `openssl`, `tokenizer`, `xml`, `ctype`, `json`
+- **Composer** >= 2.x
+- **Node.js** >= 18.x and **npm**
+- **MySQL** >= 8.x (or use SQLite for quick local dev)
+- **Ollama** — [install from ollama.com](https://ollama.com)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+## Getting Started
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 1. Clone the repository
 
-## Security Vulnerabilities
+```bash
+git clone https://github.com/MOUAD70/context-augmented-prompting.git
+cd local-llm
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 2. Pull the LLM model
 
-## License
+FireBot uses **phi3** by default. Pull it with Ollama before starting the app:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+ollama pull phi3
+```
+
+Verify Ollama is running (it should be available at `http://localhost:11434`):
+
+```bash
+ollama list
+```
+
+### 3. Install PHP dependencies
+
+```bash
+composer install
+```
+
+### 4. Configure environment
+
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+Edit `.env` and update your database connection:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=local_llm
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+> **Tip:** For a quick start without MySQL, set `DB_CONNECTION=sqlite` and create the file:
+> ```bash
+> touch database/database.sqlite
+> ```
+
+### 5. Run database migrations
+
+```bash
+php artisan migrate
+```
+
+### 6. Start the development server
+
+Run the project:
+
+```bash
+php artisan serve` — Laravel on `http://localhost:8000`
+```
+
+---
+
+## Knowledge Base
+
+FireBot answers questions **only** from data stored in the `chatbot_knowledge` table. You must seed this table with your company's information.
+
+### Schema
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | bigint | Auto-increment primary key |
+| `title` | string | Short topic title (used for keyword matching, weight ×3) |
+| `category` | string (nullable) | Grouping label, e.g. `procedures`, `roles` (weight ×2) |
+| `content` | longText | The actual knowledge content (weight ×1) |
+| `created_at`, `updated_at` | timestamp | Timestamps |
+
+### Adding Knowledge Entries
+
+You can insert entries directly via Tinker:
+
+```bash
+php artisan tinker
+```
+
+```php
+\App\Models\ChatbotKnowledge::create([
+    'title'    => 'SSIAP Roles',
+    'category' => 'roles',
+    'content'  => 'SSIAP1 is a security agent, SSIAP2 is a supervisor, SSIAP3 is the chief.',
+]);
+```
+
+Or create a seeder for bulk insertion:
+
+```bash
+php artisan make:seeder ChatbotKnowledgeSeeder
+php artisan db:seed --class=ChatbotKnowledgeSeeder
+```
+
+---
+
+## API Reference
+
+### `POST /api/chat`
+
+Send a user message and receive an AI-generated reply grounded in the knowledge base.
+
+**Request**
+
+```http
+POST /api/chat
+Content-Type: application/json
+
+{
+  "message": "What are the responsibilities of an SSIAP2?"
+}
+```
+
+**Success Response** `200 OK`
+
+```json
+{
+  "reply": "An SSIAP2 is a supervisor responsible for managing a team of SSIAP1 agents..."
+}
+```
+
+**No Knowledge Match Response** `200 OK`
+
+```json
+{
+  "reply": "I don't have that information in the company knowledge base."
+}
+```
+
+**Ollama Error Response** `500`
+
+```json
+{
+  "error": "Ollama request failed",
+  "status": 503,
+  "detail": "..."
+}
+```
+
+**Validation**
+
+| Field | Rules |
+|---|---|
+| `message` | Required, string, max 2000 characters |
+
+---
+
+##  How the Retrieval Works
+
+1. **Stop-word filtering** — Common words (`the`, `is`, `how`, etc.) are stripped from the query.
+2. **Stemming** — Basic suffix removal (`-ing`, `-ed`, `-s`) reduces words to their root form.
+3. **Scoring** — Every knowledge row is scored against the remaining keywords:
+   - Match in `title` → **+3 points**
+   - Match in `category` → **+2 points**
+   - Match in `content` → **+1 point**
+4. **Top-5 selection** — The highest-scoring rows are injected as context into the LLM prompt.
+5. **Ollama call** — The prompt is sent to `phi3` with `temperature: 0.1` for deterministic, focused answers.
